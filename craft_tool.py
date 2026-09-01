@@ -213,15 +213,18 @@ def craft_loop():
                 root.after(0, lambda p=equip_pos: messagebox.showinfo("洗装备工具", f"装备 {p} 已找到目标词条"))
                 break
             elif result == 'unique':
-                root.after(0, lambda p=equip_pos: messagebox.showinfo("洗装备工具", f"装备 {p} 已变为传奇，停止处理"))
+                # 机会石模式：只弹出“恭喜成功！”
+                root.after(0, lambda: messagebox.showinfo("恭喜成功！", "恭喜成功！"))
                 break
             elif result == 'max_attempts':
-                root.after(0, lambda p=equip_pos: messagebox.showinfo("洗装备工具", f"装备 {p} 达到最大尝试次数，未找到目标词条"))
+                # 达到最大次数不弹窗，只写日志，继续下一个装备
+                write_log(f"装备 {equip_pos} 达到最大尝试次数，未找到目标词条，继续下一个")
             elif result == 'stopped':
                 break
 
-        if not stop_event.is_set() and not exit_event.is_set():
-            root.after(0, lambda: messagebox.showinfo("洗装备工具", "所有装备处理完成"))
+        # 取消“所有装备处理完成”弹窗
+        # if not stop_event.is_set() and not exit_event.is_set():
+        #     root.after(0, lambda: messagebox.showinfo("洗装备工具", "所有装备处理完成"))
         root.after(0, update_status, "就绪")
 
 def update_status(text):
@@ -236,12 +239,14 @@ def start_craft_from_ui():
         messagebox.showwarning("提示", "请输入关键词")
         return
     KEYWORDS = parse_keywords(keywords_str)
-    MODE = mode_var.get()
+    MODE = mode_var.get()   # 点击按钮时获取模式
     update_status("运行中...")
     print(f"开始，模式：{MODE}，关键词：{KEYWORDS}")
     start_event.set()
 
 def start_craft_hotkey():
+    global MODE
+    MODE = mode_var.get()   # 热键启动时也获取模式
     if not start_event.is_set():
         update_status("运行中...")
         print(f"热键开始，模式：{MODE}，关键词：{KEYWORDS}")
@@ -289,31 +294,41 @@ def setup_tray():
     return icon
 
 def main():
-    global root, status_label, keyword_entry, mode_var
+    global root, status_label, keyword_entry, mode_var, MODE
 
     root = tk.Tk()
     root.title("洗装备工具（改造石 / 机会石+重铸石）")
     root.geometry("400x250")
     root.resizable(False, False)
 
+    # 模式选择单选按钮
     mode_var = StringVar(value=MODE)
+    def on_mode_change(*args):
+        global MODE
+        MODE = mode_var.get()
+        print(f"模式切换为：{MODE}")
+    mode_var.trace_add('write', on_mode_change)
+
     mode_frame = tk.Frame(root)
     mode_frame.pack(pady=(10,5))
     tk.Label(mode_frame, text="选择模式：").pack(side=tk.LEFT)
     tk.Radiobutton(mode_frame, text="改造石", variable=mode_var, value="alt").pack(side=tk.LEFT, padx=5)
     tk.Radiobutton(mode_frame, text="机会石+重铸石", variable=mode_var, value="chance").pack(side=tk.LEFT, padx=5)
 
+    # 关键词输入
     tk.Label(root, text="目标词条（用英文逗号分隔）:").pack(pady=(5,5))
     keyword_entry = tk.Entry(root, width=40)
     keyword_entry.insert(0, cfg["KEYWORDS"])
     keyword_entry.pack(pady=(0,10))
 
+    # 按钮行
     btn_frame = tk.Frame(root)
     btn_frame.pack(pady=5)
     tk.Button(btn_frame, text="开始 (F6)", width=12, command=start_craft_from_ui).grid(row=0, column=0, padx=5)
     tk.Button(btn_frame, text="停止 (F7)", width=12, command=stop_craft).grid(row=0, column=1, padx=5)
     tk.Button(btn_frame, text="退出 (F8)", width=12, command=exit_program).grid(row=0, column=2, padx=5)
 
+    # 状态标签
     status_label = tk.Label(root, text="就绪", fg="blue")
     status_label.pack(pady=(10,0))
 
