@@ -1,0 +1,30 @@
+name: Build EXE
+
+on:
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pyautogui pyperclip keyboard pystray pillow pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller -F -w craft_tool.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: craft-tool-exe
+          path: dist/craft_tool.exe
