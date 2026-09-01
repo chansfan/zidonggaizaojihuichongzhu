@@ -24,7 +24,7 @@ DEFAULT_CONFIG = {
     # 传奇标识关键词（仅机会石模式有效）
     "UNIQUE_KEYWORD": "传奇",
     "STOP_ON_UNIQUE": "true",
-    # 目标关键词
+    # 目标关键词（仅改造石模式有效）
     "KEYWORDS": "最大生命,火焰抗性,攻击速度,暴击率",
     # 最大尝试次数
     "MAX_ATTEMPTS": "1000",
@@ -51,7 +51,7 @@ def load_config():
             f.write("# USE_SCOUR 为 true 时先重铸再机会石，false 时直接机会石\n")
             f.write("# UNIQUE_KEYWORD 是传奇标识文字，国服“传奇”，国际服“Unique”\n")
             f.write("# MODE 可选 alt（改造石）或 chance（机会石+重铸石）\n")
-            f.write("# 关键词用英文逗号分隔\n\n")
+            f.write("# 关键词用英文逗号分隔（仅改造石模式使用）\n\n")
             for key, value in DEFAULT_CONFIG.items():
                 f.write(f"{key}={value}\n")
         return config
@@ -133,6 +133,7 @@ def get_item_text(equip_pos):
     return pyperclip.paste()
 
 def check_keywords(text):
+    """检查文本中是否包含任意关键词（仅改造石模式使用）"""
     clean_text = ''.join(text.split())
     for kw in KEYWORDS:
         clean_kw = ''.join(kw.split())
@@ -141,6 +142,7 @@ def check_keywords(text):
     return False, None
 
 def is_unique_item(text):
+    """检查物品是否为传奇（仅机会石模式使用）"""
     clean_text = ''.join(text.split())
     return UNIQUE_KEYWORD in clean_text
 
@@ -150,7 +152,7 @@ def write_log(msg):
 
 # ==================== 两种模式的装备处理函数 ====================
 def process_equip_alt(equip_pos):
-    """改造石模式：仅使用改造石，不检测传奇"""
+    """改造石模式：仅使用改造石，检测关键词"""
     attempts = 0
     while attempts < MAX_ATTEMPTS and not stop_event.is_set() and not exit_event.is_set():
         apply_currency(ALT_POS, equip_pos)
@@ -167,7 +169,7 @@ def process_equip_alt(equip_pos):
     return 'max_attempts'
 
 def process_equip_chance(equip_pos):
-    """机会石模式：可先重铸，使用机会石，检测传奇"""
+    """机会石模式：可先重铸，使用机会石，只检测传奇，不检测关键词"""
     attempts = 0
     while attempts < MAX_ATTEMPTS and not stop_event.is_set() and not exit_event.is_set():
         if USE_SCOUR:
@@ -176,16 +178,13 @@ def process_equip_chance(equip_pos):
         apply_currency(CHANCE_POS, equip_pos)
         text = get_item_text(equip_pos)
 
-        # 检测传奇
+        # 只检测传奇
         if STOP_ON_UNIQUE and is_unique_item(text):
             write_log(f"装备 {equip_pos} 检测到传奇，停止处理")
             return 'unique'
 
-        found, kw = check_keywords(text)
+        # 记录日志，但不检测关键词
         write_log(f"机会石 装备 {equip_pos} 第 {attempts+1} 次，物品信息：\n{text}\n")
-        if found:
-            write_log(f"✅ 装备 {equip_pos} 命中关键词：{kw}")
-            return 'found'
         attempts += 1
         time.sleep(random.uniform(0.05, 0.1))
     if stop_event.is_set() or exit_event.is_set():
@@ -210,15 +209,16 @@ def craft_loop():
                 result = process_equip_chance(equip_pos)
 
             if result == 'found':
+                # 仅改造石模式会进入这个分支
                 root.after(0, lambda p=equip_pos: messagebox.showinfo("洗装备工具", f"装备 {p} 已找到目标词条"))
                 break
             elif result == 'unique':
-                # 机会石模式：只弹出“恭喜成功！”
+                # 机会石模式检测到传奇：弹“恭喜成功！”
                 root.after(0, lambda: messagebox.showinfo("恭喜成功！", "恭喜成功！"))
                 break
             elif result == 'max_attempts':
                 # 达到最大次数不弹窗，只写日志，继续下一个装备
-                write_log(f"装备 {equip_pos} 达到最大尝试次数，未找到目标词条，继续下一个")
+                write_log(f"装备 {equip_pos} 达到最大尝试次数，未找到目标，继续下一个")
             elif result == 'stopped':
                 break
 
@@ -315,8 +315,8 @@ def main():
     tk.Radiobutton(mode_frame, text="改造石", variable=mode_var, value="alt").pack(side=tk.LEFT, padx=5)
     tk.Radiobutton(mode_frame, text="机会石+重铸石", variable=mode_var, value="chance").pack(side=tk.LEFT, padx=5)
 
-    # 关键词输入
-    tk.Label(root, text="目标词条（用英文逗号分隔）:").pack(pady=(5,5))
+    # 关键词输入（仅在改造石模式下使用）
+    tk.Label(root, text="目标词条（用英文逗号分隔，仅改造石模式）:").pack(pady=(5,5))
     keyword_entry = tk.Entry(root, width=40)
     keyword_entry.insert(0, cfg["KEYWORDS"])
     keyword_entry.pack(pady=(0,10))
