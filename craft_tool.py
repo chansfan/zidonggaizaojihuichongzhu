@@ -6,19 +6,19 @@ import pyautogui
 import pyperclip
 import keyboard
 import tkinter as tk
-from tkinter import messagebox, Radiobutton, StringVar
+from tkinter import messagebox, StringVar
 
 import pystray
 from PIL import Image, ImageDraw
 
-# ==================== 默认配置 ====================
+# ==================== 默认配置（已按你的坐标修改） ====================
 DEFAULT_CONFIG = {
-    # 通货坐标（改造石、机会石、重铸石）
-    "ALT_POS": "142,360",          # 改造石坐标
+    # 通货坐标
+    "ALT_POS": "150,360",          # 改造石坐标
     "CHANCE_POS": "300,360",       # 机会石坐标
-    "SCOUR_POS": "580,676",        # 重铸石坐标
+    "SCOUR_POS": "580,530",        # 重铸石坐标
     # 装备坐标列表，多个坐标用分号分隔
-    "EQUIP_POS_LIST": "449,604",
+    "EQUIP_POS_LIST": "440,600",
     # 是否使用重铸石（仅机会石模式有效）
     "USE_SCOUR": "true",
     # 传奇标识关键词（仅机会石模式有效）
@@ -47,7 +47,7 @@ def load_config():
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             f.write("# 洗装备工具配置文件\n")
             f.write("# 每行一个配置项，格式：键=值\n")
-            f.write("# 装备坐标列表用分号分隔，例如：(449,604);(500,604)\n")
+            f.write("# 装备坐标列表用分号分隔，例如：(440,600);(500,600)\n")
             f.write("# USE_SCOUR 为 true 时先重铸再机会石，false 时直接机会石\n")
             f.write("# UNIQUE_KEYWORD 是传奇标识文字，国服“传奇”，国际服“Unique”\n")
             f.write("# MODE 可选 alt（改造石）或 chance（机会石+重铸石）\n")
@@ -99,7 +99,7 @@ HOVER_DELAY = float(cfg["HOVER_DELAY"])
 START_HOTKEY = cfg["START_HOTKEY"]
 STOP_HOTKEY = cfg["STOP_HOTKEY"]
 EXIT_HOTKEY = cfg["EXIT_HOTKEY"]
-MODE = cfg.get("MODE", "alt")  # 默认模式
+MODE = cfg.get("MODE", "alt")
 
 pyautogui.FAILSAFE = True
 start_event = threading.Event()
@@ -109,7 +109,7 @@ exit_event = threading.Event()
 root = None
 status_label = None
 keyword_entry = None
-mode_var = None   # 用于保存模式选择
+mode_var = None
 
 def safe_click(pos, button='left'):
     x, y = pos
@@ -198,20 +198,17 @@ def craft_loop():
         start_event.wait()
         start_event.clear()
         stop_event.clear()
-        # 遍历所有装备位置
         for idx, equip_pos in enumerate(EQUIP_POS_LIST):
             if stop_event.is_set() or exit_event.is_set():
                 break
             write_log(f"开始处理装备 {idx+1}/{len(EQUIP_POS_LIST)}，坐标：{equip_pos}")
             root.after(0, update_status, f"正在处理装备 {idx+1}/{len(EQUIP_POS_LIST)}...")
 
-            # 根据模式选择处理函数
             if MODE == 'alt':
                 result = process_equip_alt(equip_pos)
-            else:  # chance
+            else:
                 result = process_equip_chance(equip_pos)
 
-            # 处理结果
             if result == 'found':
                 root.after(0, lambda p=equip_pos: messagebox.showinfo("洗装备工具", f"装备 {p} 已找到目标词条"))
                 break
@@ -220,9 +217,8 @@ def craft_loop():
                 break
             elif result == 'max_attempts':
                 root.after(0, lambda p=equip_pos: messagebox.showinfo("洗装备工具", f"装备 {p} 达到最大尝试次数，未找到目标词条"))
-                # 继续下一个装备
             elif result == 'stopped':
-                break  # 手动停止
+                break
 
         if not stop_event.is_set() and not exit_event.is_set():
             root.after(0, lambda: messagebox.showinfo("洗装备工具", "所有装备处理完成"))
@@ -240,7 +236,6 @@ def start_craft_from_ui():
         messagebox.showwarning("提示", "请输入关键词")
         return
     KEYWORDS = parse_keywords(keywords_str)
-    # 从单选按钮获取模式
     MODE = mode_var.get()
     update_status("运行中...")
     print(f"开始，模式：{MODE}，关键词：{KEYWORDS}")
@@ -301,28 +296,24 @@ def main():
     root.geometry("400x250")
     root.resizable(False, False)
 
-    # 模式选择单选按钮
-    mode_var = StringVar(value=MODE)  # 默认从配置读取
+    mode_var = StringVar(value=MODE)
     mode_frame = tk.Frame(root)
     mode_frame.pack(pady=(10,5))
     tk.Label(mode_frame, text="选择模式：").pack(side=tk.LEFT)
     tk.Radiobutton(mode_frame, text="改造石", variable=mode_var, value="alt").pack(side=tk.LEFT, padx=5)
     tk.Radiobutton(mode_frame, text="机会石+重铸石", variable=mode_var, value="chance").pack(side=tk.LEFT, padx=5)
 
-    # 关键词输入
     tk.Label(root, text="目标词条（用英文逗号分隔）:").pack(pady=(5,5))
     keyword_entry = tk.Entry(root, width=40)
     keyword_entry.insert(0, cfg["KEYWORDS"])
     keyword_entry.pack(pady=(0,10))
 
-    # 按钮行
     btn_frame = tk.Frame(root)
     btn_frame.pack(pady=5)
     tk.Button(btn_frame, text="开始 (F6)", width=12, command=start_craft_from_ui).grid(row=0, column=0, padx=5)
     tk.Button(btn_frame, text="停止 (F7)", width=12, command=stop_craft).grid(row=0, column=1, padx=5)
     tk.Button(btn_frame, text="退出 (F8)", width=12, command=exit_program).grid(row=0, column=2, padx=5)
 
-    # 状态标签
     status_label = tk.Label(root, text="就绪", fg="blue")
     status_label.pack(pady=(10,0))
 
